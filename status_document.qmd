@@ -1,0 +1,200 @@
+---
+title: "PREDICT_KCCQ_HF"
+prefer-html: true
+format: pdf
+editor: visual
+---
+
+```{r}
+#| warning: false
+#| include: false
+
+library(here)
+source(here::here("R/1_data_management/prep_library.R"))
+source(here::here("R/functions/functions.R"))
+source(here::here("R/1_data_management/1_load_data.R"))
+```
+
+# Figure 1: Flowchart
+
+```{r}
+#| echo: false
+kccq_data_score %>%
+    flowchart::as_fc(label= 'PREDICT study population') %>%
+    flowchart::fc_filter(hf_hx == 1 | hf_symptoms==1,
+                         label = 'Shortness of breath symptoms or have been told  heart failure', show_exc = T) %>%
+    flowchart::fc_filter(kccq_complete == 2,
+                         label = 'Completed the KCCQ', show_exc = T) %>%
+    flowchart::fc_draw()
+```
+
+Have you ever been told by a doctor or nurse that you have Heart Failure?
+
+or
+
+Over the past 2 weeks, have you experienced any symptoms of shortness of breath?
+
+\newpage
+
+# Table 1: Descriptive distributions
+
+A: Total population
+
+```{r}
+#| include: false
+
+kccq_data_complete <- kccq_data %>%
+    dplyr::filter(kccq_complete == 'Complete') %>% 
+dplyr::rename(
+                  "Q1a_shower"=Q1a_rescaled,
+                  "Q1b_walk"=Q1b_rescaled,
+                  "Q1c_jog"=Q1c_rescaled,
+                  "Q2_swelling_freq"= Q2_rescaled,
+                  "Q3_fatigue_freq"= "Q3_rescaled",
+                  "Q4_sob_freq"= "Q4_rescaled",
+                  "Q5_sleep_sit_freq"= "Q5_rescaled",
+                  "Q6_enjoyment"= "Q6_rescaled",
+                  "Q7_living"= "Q7_rescaled",
+                  "Q8a_hobbies"="Q8a_rescaled",
+                  "Q8b_chores"= "Q8b_rescaled",
+                  "Q8c_visiting"="Q8c_rescaled")
+
+kccq_data %>%
+    dplyr::select("hf_hx","hf_symptoms", "kccq_shower","kccq_walk","kccq_jog",
+                  
+                  "kccq_swelling_freq",
+                  "kccq_fatigue_freq","kccq_sob_freq","kccq_sleep_sit_freq",
+                  "kccq_qol1","kccq_qol2","kccq_qol3_hobbies","kccq_qol3_chores",
+                  "kccq_qol3_visiting","kccq_complete") %>%
+    gtsummary::tbl_summary()
+```
+
+B: Only with symptoms
+
+```{r}
+#| include: false
+
+kccq_data_complete %>%
+    dplyr::select("hf_hx","hf_symptoms",
+                  "kccq_shower",Q1a_shower,
+                  "kccq_walk",Q1b_walk,
+                  "kccq_jog",Q1c_jog,
+                  "Physical_Limitation_Score",
+                  "kccq_swelling_freq", Q2_swelling_freq,
+                  "kccq_fatigue_freq", "Q3_fatigue_freq",
+                  "kccq_sob_freq", "Q4_sob_freq",
+                  "kccq_sleep_sit_freq", "Q5_sleep_sit_freq",
+                  "Symptom_Frequency_Score",
+                  "kccq_qol1", "Q6_enjoyment",
+                  "kccq_qol2", "Q7_living",
+                  "Quality_Life_Score", 
+                  "kccq_qol3_hobbies","Q8a_hobbies",
+                  "kccq_qol3_chores", "Q8b_chores",
+                  "kccq_qol3_visiting","Q8c_visiting",
+                  "Social_Limitation_Score",
+                  "Overall_Summary_Score",
+                  "Clinical_Summary_Score"
+)%>%
+    gtsummary::tbl_summary()
+```
+
+# Distributions of questionnarie scores
+
+## Physical Limitation Score domain
+
+```{r}
+#| echo: false
+
+kccq_data_complete %>% 
+    dplyr::select(Q1a_shower, Q1b_walk, Q1c_jog) %>% 
+    hist.data.frame()
+```
+
+## Symptom Frequency domain
+
+```{r}
+#| echo: false
+
+kccq_data_complete %>% 
+    dplyr::select(Q2_swelling_freq, "Q3_fatigue_freq", "Q4_sob_freq", "Q5_sleep_sit_freq") %>% 
+    hist.data.frame()
+```
+
+## Quality of life and social domains
+
+```{r}
+#| echo: false
+
+kccq_data_complete %>% 
+    dplyr::select("Q6_enjoyment", "Q7_living","Q8a_hobbies", "Q8b_chores","Q8c_visiting") %>% 
+    hist.data.frame()
+```
+
+# Distributions of overall scores
+
+```{r}
+#| echo: false
+
+kccq_data_complete %>% 
+    dplyr::select(Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, "Social_Limitation_Score", "Overall_Summary_Score", "Clinical_Summary_Score") %>% 
+    hist.data.frame()
+```
+
+# Echo measures
+
+```{r}
+study_data %>% 
+    dplyr::select("mvee","ivsdcm","lviddcm","lvpwdcm","lvdmassg","lvdmassindexgm",
+"lvedvmodbipml","lvedvimodbipmlm","lvefmodbip", "lvefautoefa4c","lvefautoefa2c","lvefautoefbip") %>%
+    hist.data.frame()
+```
+
+```{r}
+study_data %>% 
+    dplyr::select("lvedv4dautolvqml","lvesv4dautolvqml","lvef4dautolvq","raesvalml","mvevelocityms", "mvavelocityms","mvea","mvdectimems","mvecms","lvotdiamcm","lvotvticm","lvotsvimlm") %>%
+    hist.data.frame()
+```
+
+```{r}
+study_data %>% 
+    dplyr::select("aoascdiamcm","tvscms","ivcmmmm","glpsafia4c","glpsafia2c","glpsafilax","glpsavgafi","mveseptcms", "mveesept","mvelatcms", "mveelat","mveavgcms") %>%
+    hist.data.frame()
+```
+
+```{r}
+
+study_data %>% 
+    dplyr::select("mveeavg"  ,"mvee","laesvmodbipml") %>%
+    hist.data.frame()
+```
+
+## Completed KCCP population
+
+```{r}
+study_data_complete %>% 
+    dplyr::select("mvee","ivsdcm","lviddcm","lvpwdcm","lvdmassg","lvdmassindexgm",
+"lvedvmodbipml","lvedvimodbipmlm","lvefmodbip", "lvefautoefa4c","lvefautoefa2c","lvefautoefbip") %>%
+    hist.data.frame()
+```
+
+```{r}
+study_data_complete %>% 
+    dplyr::select("lvedv4dautolvqml","lvesv4dautolvqml","lvef4dautolvq","raesvalml","mvevelocityms", "mvavelocityms","mvea","mvdectimems","mvecms","lvotdiamcm","lvotvticm","lvotsvimlm") %>%
+    hist.data.frame()
+```
+
+```{r}
+study_data_complete %>% 
+    dplyr::select("aoascdiamcm","tvscms","ivcmmmm","glpsafia4c","glpsafia2c","glpsafilax","glpsavgafi","mveseptcms", "mveesept","mvelatcms", "mveelat","mveavgcms") %>%
+    hist.data.frame()
+```
+
+```{r}
+study_data_complete %>% 
+    dplyr::select("mveeavg"  ,"mvee","laesvmodbipml") %>%
+    hist.data.frame()
+```
+
+Talk to Mathab and JD about list of usual variables - confounder and echo missing for more than half of participants
+
+LV hypertrophy - LV mass index correlated with norephrine spillover association with heart rate?

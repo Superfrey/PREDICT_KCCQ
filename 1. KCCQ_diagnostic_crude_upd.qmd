@@ -1,0 +1,189 @@
+1. KCCQ_diagnostic_crude
+---
+title: "analysis plan"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| warning: false
+#| include: false
+
+library(here)
+source(here::here("R/1_data_management/1_load_data.R"))
+source(here::here("R/tools/ROC_function.R"))
+```
+
+
+# Step 1: Determine the overall sensitivity of responding having symptoms of shortness of breath and define population with false negative response.
+
+## Shortness of breath
+
+```{r}
+#| include: false
+#| warning: false
+# study_data_crude$hf_sum_fac <- as.factor(study_data_crude[["hf_symptoms"]])
+# table(study_data_crude$hf_sum_fac, study_data_crude$hf_symptoms)
+# study_data_crude$DD_dia_dys_fac <-factor(study_data_crude[["DD_dia_dys"]], labels = c(0,1))
+#
+# test <- fct_rev(study_data_crude$hf_sum_fac)
+# reference <- fct_rev(study_data_crude$DD_dia_dys_fac)
+# table(test, study_data_crude[["hf_symptoms"]])
+# table(reference, study_data_crude[["DD_dia_dys"]])
+
+
+sens_LAE <- con_matrix(study_data_complete, "hf_symptoms", "abn_lavi")
+sens_ci_LAE <- epiR::epi.tests(sens_LAE$table)
+sens_LAE$table
+sens_ci_LAE$detail[1:4, ]
+sens_ci_LAE <- sens_ci_LAE$detail[1:4, ] %>%
+    mutate(heart_failure = "Left_artrium_enlargement")
+
+sens_LVH <- con_matrix(study_data_complete, "hf_symptoms", "lvh")
+sens_ci_LVH <- epiR::epi.tests(sens_LVH$table)
+sens_LVH$table
+sens_ci_LVH <- sens_ci_LVH$detail[1:4, ] %>%
+    mutate(heart_failure = "Left_ventricular_hypotrophy")
+
+
+sens_DD <- con_matrix(study_data_complete, "hf_symptoms", "abn_ee")
+sens_ci_DD <- epiR::epi.tests(sens_DD$table)
+sens_ci_DD <- sens_ci_DD$detail[1:4, ] %>%
+    mutate(heart_failure = "Diastolic dysfunction")
+sens_DD$byClass[1]
+
+sens_GLS <- con_matrix(study_data_complete, "hf_symptoms", "abn_gls")
+sens_ci_GLS <- epiR::epi.tests(sens_GLS$table)
+sens_ci_GLS <- sens_ci_GLS$detail[1:4, ] %>%
+    mutate(heart_failure = "GLS abnormal")
+
+# con_matrix(study_data_crude,"hf_symptoms","GLS_abnormal")
+
+sensitivity_SOB <- rbind(sens_ci_LVH, sens_ci_LAE, sens_ci_GLS, sens_ci_DD
+)
+sensitivity_SOB <- sensitivity_SOB %>%
+    dplyr::filter(statistic == "se" | statistic == "sp")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+
+SOB_plot <- sensitivity_SOB %>%
+  ggplot(aes(
+    x = est,
+    y = heart_failure,
+    xmin = lower,
+    xmax = upper,
+    color = statistic
+  ), ) +
+  geom_point() +
+  geom_pointrange() +
+  scale_color_manual(values = c("se" = "#1E88E5", "sp" = "#004D40")) +
+  theme_bw() +
+  theme(
+    panel.border = element_blank(), panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
+    axis.title.y = element_blank()
+  ) +
+  xlab("Sensitivity / Specificity of symptoms of shortness of breath last 14 days")
+
+SOB_plot
+```
+
+```{r}
+#| echo: false
+#| warning: false
+
+sensitivity_SOB
+```
+
+## Partial conclusion:
+
+Signs of shortness of breath has a poor sensitivity on sub clinical measures of heart failure based on defined cut-off. We need more echo measurement to rule if the findings are consistent and discuss which measurement we are going to use from the echo and what should be their cutoff. The limitation for now is we have low count of people with echo who has been processed. Based on our decisions we will determine population with asymptotically heart failure in step 1 by the false negative individuals.
+
+# Step 2: Determine the auc, sensitivity and specificity as well as the false-positive rate by KCCQ
+
+# Watch-DM
+```{r}
+watch_dm <- roc_function_multiple(study_data_fct, "any_abnormality", "watch_dm_risk_score", direction = "<")
+watch_dm$data
+watch_dm_hf_symptoms <- roc_function_multiple(study_data_fct %>% 
+                                      filter(hf_symptoms=="1"), "any_abnormality", "watch_dm_risk_score", direction = "<")
+watch_dm_hf_symptoms$data
+
+watch_dm_hf_kccq <- roc_function_multiple(study_data_fct %>% 
+                                      filter(Clinical_Score_80cu=="1"), "any_abnormality", "watch_dm_risk_score", direction = "<")
+watch_dm_hf_kccq$data
+
+plot.roc(study_data_fct$any_abnormality, study_data_fct$watch_dm_risk_score,
+          percent = TRUE,                    # show all values in percent
+         partial.auc=c(100, 45.45455),
+         partial.auc.correct=TRUE,          # define a partial AUC (pAUC)
+         print.auc=TRUE,                    
+       # display pAUC value on the plot with following options:
+        print.auc.pattern = "Corrected pAUC (100-45.45455%% SP):\n%.1f%%",
+         print.auc.col = "#1c61b6",
+        auc.polygon = TRUE,
+        auc.polygon.col = "#1c61b6",       # show pAUC as a polygon
+        max.auc.polygon = TRUE,
+        max.auc.polygon.col = "#1c61b622", # also show the 100% polygon
+         main = "Partial AUC (pAUC)")
+
+
+
+
+formula_string <- paste("any_abnormality", "~", "watch_dm_risk_score")
+    formula <- as.formula(formula_string)
+
+    # Apply the roc function with the formula
+    roc_estimates <- roc(formula, data = study_data_fct, direction = "<")
+    
+    best_roc <- coords(roc_estimates, "best", ret = "threshold", best.method = "closest.topleft", transpose = FALSE)
+    best_se_sp <- coords(roc_estimates, as.numeric(best_roc), transpose = FALSE)
+    predictor_name <- roc_estimates$predictor.name
+    outcome_name <- roc_estimates$response.name
+    best_performance <- cbind(outcome_name, predictor_name, best_se_sp)
+    best_performance
+    
+    cbind(roc_estimates$thresholds, roc_estimates$sensitivities, roc_estimates$specificities)
+
+```
+
+## ROC curve for the overall and different domains of KCCQ
+
+### Including total population
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+hf_diagnosis <- c("abn_ee","abn_gls","abn_lavi","lvh", "any_abnormality")
+map(hf_diagnosis, ~ roc_kccq_overall(study_data_complete, .x))
+```
+
+### Best threshold and sensitivity and specificity
+
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+hf_diagnosis <- c("abn_ee","abn_gls","abn_lavi","lvh")
+
+outcome_best_kccq_threshold <- map(hf_diagnosis, ~ roc_kccq_num(study_data_complete, .x))
+
+outcome_best_kccq_threshold
+```
+
+#### Partly conclusion:
+
+People who did not respond to the KCCQ due to not have any signs of SOB, skews the ROC curve (grouped distribution of cases). Thus, the question becomes more about which KCCQ domain is a good diagnostic indicator for people who are experiencing shortness of breath, however this population becomes more selected based on the criteria. Should we make a more logistic model to account age = sex and other measures?
+
+## Partial conlcusion:
+
+The ROC curve make a huge line jump when including those with no SOB (hence 100 KCCQ), likely because of our positive cases have all the same value (100). Shall we therefore exclude those who do not have SOB, as they also has not been asked about the other questions?
+
+The KCCQ domains performs varies depending of the type of heart failure. Single questions within the domain did not outperformed the calculate average for the overall domain. Some of the ROC curve did not performed worse than a coin toss in some of the HF subtypes. Whether this is true or a analysis error has to be checked.

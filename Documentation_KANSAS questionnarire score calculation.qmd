@@ -1,0 +1,310 @@
+---
+title: "Documentation: KANSAS questionnarire score calculation"
+format: pdf
+editor: visual
+---
+
+Four domain scores and two summary scores are generated from the KCCQ-12: Physical Limitation Score (KCCQ12-PL) Symptom Frequency Score (KCCQ12-SF) Quality of Life Score (KCCQ12-QL) Social Limitation Score (KCCQ12-SL) Overall Summary Score (KCCQ12-OS) Clinical Summary Score (KCCQ12-CS)
+
+Scores are scaled 0-100, where 0 denotes the lowest reportable health status and 100 the highest.
+
+```{r}
+#| include: false
+#| warning: false
+library(here)
+source(here::here("R/1_data_management/prep_library.R"))
+kccq_data_score <- haven::read_dta("S:/Progression of DM Complications/Questionnaires. Physical Function Tests. REDCap pdf copy for printing/KCCQ/Data 2024-07-16/kccq_bl_2024-07-16.dta")
+```
+
+## Physical Limitation Score
+
+The Physical Limitation score corresponds to Questions 1a, 1b and 1c. Responses are coded as follows:
+
+-   Extremely limited ........................................................... 1
+-   Quite a bit limited ........................................................... 2
+-   Moderately limited .......................................................... 3
+-   Slightly limited ............................................................... 4
+-   Not at all limited ............................................................. 5
+-   Limited for other reasons or did not do the activity ........ 6
+
+A response of 6 is treated as a missing value for the purposes of scoring. If responses to two or more questions are missing, no score is computed. Otherwise, the score is then calculated by taking the average of the non-missing responses and rescaling to 0-100, as follows: KCCQ12-PL = 100\*\[(average of Questions 1a, 1b and 1c) – 1\]/4
+
+```{r}
+kccq_data_score <- kccq_data_score %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(
+        Q1a_rescaled = 100 * (sum(kccq_shower[c(kccq_shower) > 0], na.rm = T)-1) / 4,
+        Q1a_rescaled = ifelse(is.na(kccq_shower) | Q1a_rescaled < 0, NA, Q1a_rescaled),
+        
+        Q1b_rescaled = 100 * (sum(kccq_walk[c(kccq_walk) > 0], na.rm = T)-1) / 4,
+        Q1b_rescaled = ifelse(is.na(kccq_walk) | Q1b_rescaled < 0, NA, Q1b_rescaled),
+        
+        Q1c_rescaled = 100 * (sum(kccq_jog[c(kccq_jog) > 0], na.rm = T)-1) / 4,
+        Q1c_rescaled = ifelse(is.na(kccq_jog) | Q1c_rescaled < 0, NA, Q1c_rescaled),
+        
+        # KCCQ12-SF = average of rescaled responses
+        Physical_Limitation_Score = mean(c(Q1a_rescaled, Q1b_rescaled, Q1c_rescaled), na.rm = TRUE),
+        Physical_Limitation_Score = ifelse(sum(is.na(Q1a_rescaled),is.na(Q1b_rescaled), is.na(Q1c_rescaled))>= 2, NA, Physical_Limitation_Score)
+        
+    ) %>% 
+    dplyr::ungroup()
+# KCCQ12-PL = 100*[(average of Questions 1a, 1b and 1c) – 1]/4
+
+```
+
+# Symptom Frequency Score
+
+The Symptom Frequency score corresponds to Questions 2, 3, 4 and 5. Responses are coded as follows:
+
+Question 2 Response
+
+-   Every morning ................................................................ 1
+-   3 or more times per week but not every day ................... 2
+-   1-2 times per week .......................................................... 3
+-   Less than once a week .................................................... 4
+-   Never over the past 2 weeks ........................................... 5
+
+Questions 3 and 4 Response
+
+-   All of the time ................................................................. 1
+-   Several times per day ...................................................... 2
+-   at least once a day .......................................................... 3
+-   3 or more times per week but not every day ................... 4
+-   1-2 times per week .......................................................... 5
+-   Less than once a week .................................................... 6
+-   Never over the past 2 weeks ........................................... 7
+
+Question 5 Response
+
+-   Every night ...................................................................... 1
+-   3 or more times per week but not every day ................... 2
+-   1-2 times per week .......................................................... 3
+-   Less than once a week .................................................... 4
+-   Never over the past 2 weeks ........................................... 5
+
+If responses to three or more questions are missing, no score is computed. Otherwise, the score is then calculated by first rescaling each non-missing response to 0-100, then taking the average of the rescaled non-missing responses, as follows:
+
+Q2 rescaled = 100 × (Q2 response – 1) ÷ 4 Q3 rescaled = 100 × (Q3 response – 1) ÷ 6 Q4 rescaled = 100 × (Q4 response – 1) ÷ 6 Q5 rescaled = 100 × (Q5 response – 1) ÷ 4
+
+```{r}
+
+kccq_data_score <- kccq_data_score %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(
+        Q2_rescaled = 100 * ((sum(kccq_swelling_freq, na.rm = T)+1)-1) / 4, # add plus one to correct categorization
+        Q2_rescaled = ifelse(is.na(kccq_swelling_freq), NA, Q2_rescaled),
+        
+        Q3_rescaled = 100 * (sum(kccq_fatigue_freq, na.rm = T) - 1) / 6,
+        Q3_rescaled = ifelse(is.na(kccq_fatigue_freq), NA, Q3_rescaled),
+
+        Q4_rescaled = 100 * (sum(kccq_sob_freq, na.rm = T) - 1) / 6,
+        Q4_rescaled = ifelse(is.na(kccq_sob_freq), NA, Q4_rescaled),
+
+        Q5_rescaled = 100 * (sum(kccq_sleep_sit_freq, na.rm = T) - 1) / 4,
+        Q5_rescaled = ifelse(is.na(kccq_sleep_sit_freq), NA, Q5_rescaled),
+        
+        # KCCQ12-SF = average of rescaled responses
+        Symptom_Frequency_Score = mean(c(Q2_rescaled, Q3_rescaled, Q4_rescaled, Q5_rescaled), na.rm = TRUE),
+        Symptom_Frequency_Score = ifelse(sum(is.na(Q2_rescaled),is.na(Q3_rescaled),
+                                             is.na(Q4_rescaled),is.na(Q5_rescaled))>= 2, NA, Symptom_Frequency_Score)
+    ) %>% 
+    dplyr::ungroup()
+
+```
+
+# Quality of Life Score
+
+The Quality of Life score corresponds to Questions 6 and 7. Responses are coded as follows:
+
+Question 6 Response
+
+-   It has extremely limited my enjoyment of life ................ 1
+-   It has limited my enjoyment of life quite a bit ................ 2
+-   It has moderately limited my enjoyment of life .............. 3
+-   It has slightly limited my enjoyment of life .................... 4
+-   It has not limited my enjoyment of life at all .................. 5
+
+Question 7 Response
+
+-   Not at all satisfied ........................................................... 1
+-   Mostly dissatisfied .......................................................... 2
+-   Somewhat satisfied ......................................................... 3
+-   Mostly satisfied ............................................................... 4
+-   Completely satisfied ....................................................... 5
+
+If responses to both questions are missing, no score is computed. Otherwise, the score is calculated by taking the average of the non-missing responses and rescaling to 0-100, as follows: KCCQ12-QL = 100\*\[(average of Questions 6 and 7) – 1\]/4
+
+```{r}
+
+kccq_data_score <- kccq_data_score %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(
+        Q6_rescaled = 100 * (sum(kccq_qol1, na.rm = T)-1) / 4,
+        Q6_rescaled = ifelse(is.na(kccq_qol1), NA, Q6_rescaled),
+        
+        Q7_rescaled = 100 * (sum(kccq_qol2, na.rm = T) - 1) / 4,
+        Q7_rescaled = ifelse(is.na(kccq_qol2), NA, Q7_rescaled),
+        
+        # KCCQ12-SF = average of rescaled responses
+        Quality_Life_Score = mean(c(Q6_rescaled, Q7_rescaled), na.rm = TRUE),
+        Quality_Life_Score = ifelse(sum(is.na(Q6_rescaled),is.na(Q7_rescaled))== 2, NA, Quality_Life_Score)
+    ) %>% 
+    dplyr::ungroup()
+
+```
+
+# Social Limitation Score
+
+The Social Limitation score corresponds to Questions 8a, 8b and 8c. Responses are coded as follows:
+
+-   Severely limited .............................................................. 1
+-   Limited quite a bit ........................................................... 2
+-   Moderately limited .......................................................... 3
+-   Slightly limited ............................................................... 4
+-   Did not limit at all ........................................................... 5
+-   Does not apply or did not do for other reasons ............... 6
+
+A response of 6 is treated as a missing value for the purposes of scoring. If responses to two or more questions are missing, no score is computed. Otherwise, the score is then calculated by taking the average of the non-missing responses and rescaling to 0-100, as follows: KCCQ12-SL = 100\*\[(average of Questions 8a, 8b and 8c) – 1\]/4
+
+```{r}
+kccq_data_score <- kccq_data_score %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(
+        
+        Q8a_rescaled = 100 * (sum(kccq_qol3_hobbies[c(kccq_qol3_hobbies) > 0], na.rm = T)-1) / 4,
+        Q8a_rescaled = ifelse(is.na(kccq_qol3_hobbies) | Q8a_rescaled < 0, NA, Q8a_rescaled),
+
+        Q8b_rescaled = 100 * (sum(kccq_qol3_chores[c(kccq_qol3_chores) > 0], na.rm = T)-1) / 4,
+        Q8b_rescaled = ifelse(is.na(kccq_qol3_chores) | Q8b_rescaled < 0, NA, Q8b_rescaled),
+
+        Q8c_rescaled = 100 * (sum(kccq_qol3_visiting[c(kccq_qol3_visiting) > 0], na.rm = T)-1) / 4,
+        Q8c_rescaled = ifelse(is.na(kccq_qol3_visiting) | Q8c_rescaled < 0, NA, Q8c_rescaled),
+        
+        # KCCQ12-SF = average of rescaled responses
+        Social_Limitation_Score = mean(c(Q8a_rescaled, Q8b_rescaled, Q8c_rescaled), na.rm = TRUE),
+        Social_Limitation_Score = ifelse(sum(is.na(Q8a_rescaled), is.na(Q8b_rescaled), is.na(Q8c_rescaled))>= 2, NA, Social_Limitation_Score)
+    ) %>% 
+    dplyr::ungroup()
+```
+
+# Overall Summary Score
+
+The Overall Summary score represents an integration of the patient’s physical limitation, symptom frequency, quality of life and social limitation. If all four domain scores are missing, no score is computed. Otherwise, the score is calculated as the average of the non-missing domain scores:
+
+KCCQ12-OS = average of KCCQ12-PL, KCCQ12-SF, KCCQ12-QL and KCCQ12-SL
+
+```{r}
+kccq_data_score <- kccq_data_score %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(
+        Overall_Summary_Score = mean(c(Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score), na.rm = TRUE),
+        Overall_Summary_Score = ifelse(sum(is.na(Physical_Limitation_Score), is.na(Symptom_Frequency_Score), is.na(Quality_Life_Score), is.na(Social_Limitation_Score))>= 2, NA, Overall_Summary_Score)
+    ) %>% 
+    dplyr::ungroup()
+```
+
+# Clinical Summary Score
+
+The Clinical Summary score represents an integration of the patient’s physical limitation and symptom frequency. If both domain scores are missing, no score is computed. Otherwise, the score is calculated as the average of the non-missing domain scores:
+
+KCCQ12 = average of KCCQ12-PL and KCCQ12-SF
+
+```{r}
+kccq_data_score <- kccq_data_score %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(
+        Clinical_Summary_Score = mean(c(Physical_Limitation_Score, Symptom_Frequency_Score), na.rm = TRUE),
+        Clinical_Summary_Score = ifelse(sum(is.na(Physical_Limitation_Score), is.na(Symptom_Frequency_Score))>= 2, NA, Clinical_Summary_Score)
+    ) %>% 
+    dplyr::ungroup()
+```
+
+# Distributions
+
+```{r}
+#| echo: true
+#| warning: false
+
+kccq_data_score %>% 
+    dplyr::select(Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score) %>% 
+    hist.data.frame()
+```
+
+# Function for all calculations
+
+```{r}
+
+kccq_score_function <- function(data) {
+
+    data <- data %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+        Q1a_rescaled = 100 * (sum(kccq_shower[c(kccq_shower) > 0], na.rm = T)-1) / 4,
+        Q1a_rescaled = ifelse(is.na(kccq_shower) | Q1a_rescaled < 0, NA, Q1a_rescaled),
+        
+        Q1b_rescaled = 100 * (sum(kccq_walk[c(kccq_walk) > 0], na.rm = T)-1) / 4,
+        Q1b_rescaled = ifelse(is.na(kccq_walk) | Q1b_rescaled < 0, NA, Q1b_rescaled),
+        
+        Q1c_rescaled = 100 * (sum(kccq_jog[c(kccq_jog) > 0], na.rm = T)-1) / 4,
+        Q1c_rescaled = ifelse(is.na(kccq_jog) | Q1c_rescaled < 0, NA, Q1c_rescaled),
+        
+        # KCCQ12-SF = average of rescaled responses
+        Physical_Limitation_Score = mean(c(Q1a_rescaled, Q1b_rescaled, Q1c_rescaled), na.rm = TRUE),
+        Physical_Limitation_Score = ifelse(sum(is.na(Q1a_rescaled),is.na(Q1b_rescaled), is.na(Q1c_rescaled))>= 2, NA, Physical_Limitation_Score),
+
+        Physical_Limitation_Score = mean(c(Q1a_rescaled, Q1b_rescaled, Q1c_rescaled), na.rm = TRUE),
+        Physical_Limitation_Score = ifelse(sum(is.na(Q1a_rescaled),is.na(Q1b_rescaled), is.na(Q1c_rescaled))>= 2, NA, Physical_Limitation_Score),
+
+        Q2_rescaled = 100 * ((sum(kccq_swelling_freq, na.rm = T)+1)-1) / 4, # add plus one to correct categorization
+        Q2_rescaled = ifelse(is.na(kccq_swelling_freq), NA, Q2_rescaled),
+
+        Q3_rescaled = 100 * (sum(kccq_fatigue_freq, na.rm = T) - 1) / 6,
+        Q3_rescaled = ifelse(is.na(kccq_fatigue_freq), NA, Q3_rescaled),
+
+        Q4_rescaled = 100 * (sum(kccq_sob_freq, na.rm = T) - 1) / 6,
+        Q4_rescaled = ifelse(is.na(kccq_sob_freq), NA, Q4_rescaled),
+
+        Q5_rescaled = 100 * (sum(kccq_sleep_sit_freq, na.rm = T) - 1) / 4,
+        Q5_rescaled = ifelse(is.na(kccq_sleep_sit_freq), NA, Q5_rescaled),
+
+        Symptom_Frequency_Score = mean(c(Q2_rescaled, Q3_rescaled, Q4_rescaled, Q5_rescaled), na.rm = TRUE),
+        Symptom_Frequency_Score = ifelse(sum(is.na(Q2_rescaled),is.na(Q3_rescaled),
+                                             is.na(Q4_rescaled),is.na(Q5_rescaled))>= 2, NA, Symptom_Frequency_Score),
+
+        Q6_rescaled = 100 * (sum(kccq_qol1, na.rm = T)-1) / 4,
+        Q6_rescaled = ifelse(is.na(kccq_qol1), NA, Q6_rescaled),
+
+        Q7_rescaled = 100 * (sum(kccq_qol2, na.rm = T) - 1) / 4,
+        Q7_rescaled = ifelse(is.na(kccq_qol2), NA, Q7_rescaled),
+
+        Quality_Life_Score = mean(c(Q6_rescaled, Q7_rescaled), na.rm = TRUE),
+        Quality_Life_Score = ifelse(sum(is.na(Q6_rescaled),is.na(Q7_rescaled))== 2, NA, Quality_Life_Score),
+
+
+        Q8a_rescaled = 100 * (sum(kccq_qol3_hobbies[c(kccq_qol3_hobbies) > 0], na.rm = T)-1) / 4,
+        Q8a_rescaled = ifelse(is.na(kccq_qol3_hobbies) | Q8a_rescaled < 0, NA, Q8a_rescaled),
+
+        Q8b_rescaled = 100 * (sum(kccq_qol3_chores[c(kccq_qol3_chores) > 0], na.rm = T)-1) / 4,
+        Q8b_rescaled = ifelse(is.na(kccq_qol3_chores) | Q8b_rescaled < 0, NA, Q8b_rescaled),
+
+        Q8c_rescaled = 100 * (sum(kccq_qol3_visiting[c(kccq_qol3_visiting) > 0], na.rm = T)-1) / 4,
+        Q8c_rescaled = ifelse(is.na(kccq_qol3_visiting) | Q8c_rescaled < 0, NA, Q8c_rescaled),
+
+        Social_Limitation_Score = mean(c(Q8a_rescaled, Q8b_rescaled, Q8c_rescaled), na.rm = TRUE),
+        Social_Limitation_Score = ifelse(sum(is.na(Q8a_rescaled), is.na(Q8b_rescaled), is.na(Q8c_rescaled))>= 2, NA, Social_Limitation_Score),
+
+
+        Overall_Summary_Score = mean(c(Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score), na.rm = TRUE),
+        Overall_Summary_Score = ifelse(sum(is.na(Physical_Limitation_Score), is.na(Symptom_Frequency_Score),
+                                           is.na(Quality_Life_Score), is.na(Social_Limitation_Score))>= 2, NA, Overall_Summary_Score),
+
+        Clinical_Summary_Score = mean(c(Physical_Limitation_Score, Symptom_Frequency_Score), na.rm = TRUE),
+        Clinical_Summary_Score = ifelse(sum(is.na(Physical_Limitation_Score), is.na(Symptom_Frequency_Score))>= 2, NA, Clinical_Summary_Score)
+    ) %>%
+    dplyr::ungroup()
+
+}
+
+# load function and insert data frame
+# kccq_score_data <- kccq_score_function(data)
+```

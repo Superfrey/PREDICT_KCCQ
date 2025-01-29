@@ -1,0 +1,400 @@
+---
+title: "Analysis"
+format: pdf
+editor: visual
+---
+
+# Status
+
+Too few cases in the different cutoff for HF diagnogsis based on ECHO
+
+```{r}
+#| warning: false
+#| include: false
+
+library(here)
+source(here::here("R/1_data_management/prep_library.R"))
+source(here::here("R/functions/functions.R"))
+source(here::here("R/1_data_management/1_load_data.R"))
+```
+
+# Figure 1: Flowchart
+
+```{r}
+echo_data %>%
+    flowchart::as_fc(label= 'PREDICT study population') %>%
+    flowchart::fc_filter(!is.na(hf_symptoms),
+                         label = 'No respond on HF symptoms', show_exc = T) %>%
+    flowchart::fc_filter(hf_hx == 0,
+                         label = 'Without dianogsed heart failure', show_exc = T) %>%
+    flowchart::fc_filter(hf_symptoms==0 | (hf_symptoms==1 & kccq_complete == 2),
+                         label = 'Completed the KCCQ', show_exc = T) %>%
+    flowchart::fc_draw()
+```
+
+```{r}
+#| echo: false
+echo_data %>%
+    flowchart::as_fc(label= 'PREDICT study population') %>%
+    flowchart::fc_filter(!is.na(hf_symptoms),
+                         label = 'No respond on HF symptoms', show_exc = T) %>%
+    flowchart::fc_filter(hf_hx == 0,
+                         label = 'Without dianogsed heart failure', show_exc = T) %>%
+    flowchart::fc_filter(hf_symptoms==0 | (hf_symptoms==1 & kccq_complete == 2),
+                         label = 'Completed the KCCQ', show_exc = T) %>%
+    flowchart::fc_filter(!is.na(HFrEF),
+                         label = 'LVEF recorded', show_exc = T) %>%
+    flowchart::fc_draw()
+```
+
+# Distributions of overall scores
+
+```{r}
+#| include: false
+
+# kccq_data_complete %>% 
+#     dplyr::select(Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, "Social_Limitation_Score", "Overall_Summary_Score", "Clinical_Summary_Score") %>% 
+#     hist.data.frame()
+```
+
+# table 1
+
+```{r}
+study_data %>% 
+    dplyr::select("hf_symptoms",
+                  
+                  Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score,
+                  age, age_current, gender, year_diag_diab, age_dm_diag, education,
+smoking, "days_alcohol","days_alcohol_cov",
+"height", "weight","bmi",
+hdl, chol,"hdl_cat", ldl, trig,
+a1c_pcent, a1c_mmol, glucosef,
+bp_syst_mean, bp_diast_mean, waist_1, hip_1,
+heart_rate, heart_rate2 ,heart_rate3,
+                  
+                  "LAE_lf_art_enlarg", "GLS_imparied", "LVH_lf_vent_hyptro", "DD_dia_dys", "EF_HF", "HFpEF", "HFmrEF_rEF") %>%
+    gtsummary::tbl_summary(by = "hf_symptoms")
+```
+
+# Association between KCCQ and cardiac function
+
+```{r}
+#| include: false
+#| 
+ # study_data %>% 
+ #     dplyr::select(
+ # mvdectimems,
+ # eepsept,
+ # mvea,
+ # glpsavgafi,
+ # lvdmassindexgm,
+ # laesvialmlm,
+ # lvefautoefbip,
+ # lvef4dautolvq)  %>%
+ #     hist.data.frame() 
+```
+
+```{r}
+
+echo_measures <- c("mvecms",
+                   "eepsept",
+                   "mvea",
+                   "glpsavgafi",
+                   "lvdmassindexgm",
+                   "laesvialmlm",
+                   "lvef4dautolvq")
+
+results_hf_symptoms <- map(echo_measures, ~ lm_function(study_data, .x, "hf_symptoms")) %>% 
+    list_rbind()
+
+results_hf_symptoms %>% 
+    knitr::kable()
+```
+
+*Hypothesis: Higher KCCQ-SCORE are associated with better cardiac function outcomes*
+
+## E prime
+
+```{r}
+#| echo: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, mvecms, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), mvecms) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate() %>% 
+    plot_estimates() + 
+    xlab("e' per SD higher KCCQ-score")
+
+```
+
+```{r}
+#| echo: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, mvecms, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), mvecms) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate_overall() %>% 
+    plot_estimates_overall() + 
+    xlab("e' per SD higher KCCQ-score")
+```
+
+Higher e' higher cardiac function
+
+## E/e'
+
+```{r}
+#| include: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, eepsept, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), eepsept) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate() %>% 
+    plot_estimates() + 
+    xlab(" E/e' per SD higher KCCQ-score")
+
+```
+
+```{r}
+#| echo: false
+
+    study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, eepsept, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), eepsept) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate_overall() %>% 
+    plot_estimates_overall() + 
+    xlab("e' per SD higher KCCQ-score")
+```
+
+LAE_lf_art_enlarg, LVH_lf_vent_hyptro, DD_dia_dys, GLS_imparied, GLS_abnormal Lower E/e' higher cardiac function
+
+## E/A ratio
+
+```{r}
+#| include: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, mvea, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), mvea) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate() %>% 
+    plot_estimates() + 
+    xlab("E/A per SD higher KCCQ-score")
+
+```
+
+```{r}
+#| echo: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, mvea, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), mvea) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate_overall() %>% 
+    plot_estimates_overall() + 
+    xlab("E/A per SD higher KCCQ-score")
+```
+
+Higher E/A better cardiac function
+
+## GLS ratio
+
+```{r}
+#| include: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, glpsavgafi, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), glpsavgafi) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate() %>% 
+    plot_estimates() + 
+    xlab("GLS per SD higher KCCQ-score")
+
+```
+
+```{r}
+#| echo: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, glpsavgafi, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), glpsavgafi) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate_overall() %>% 
+    plot_estimates_overall() + 
+    xlab("GLS per SD higher KCCQ-score")
+
+```
+
+Lower GLS higher cardiac function
+
+## Left ventricular mass index
+
+```{r}
+#| include: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, lvdmassindexgm, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), lvdmassindexgm) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate() %>% 
+    plot_estimates() + 
+    xlab("LVMi SD higher KCCQ-score")
+
+```
+
+```{r}
+#| echo: false
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, lvdmassindexgm, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), lvdmassindexgm) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate_overall() %>% 
+    plot_estimates_overall() + 
+    xlab("LVMi SD higher KCCQ-score")
+
+```
+
+Lower LVMi higher cardiac function
+
+## Lef atrium volume
+
+```{r}
+#| include: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, laesvialmlm, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), laesvialmlm) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate() %>% 
+    plot_estimates() + 
+    xlab("LAV per SD higher KCCQ-score")
+
+```
+
+```{r}
+#| echo: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, laesvialmlm, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), laesvialmlm) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate_overall() %>% 
+    plot_estimates_overall() + 
+    xlab("LAV per SD higher KCCQ-score")
+
+```
+
+## Left ejection fraction
+
+```{r}
+#| include: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, lvef4dautolvq, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), lvef4dautolvq) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate() %>% 
+    plot_estimates() + 
+    xlab("LEF per SD higher KCCQ-score")
+
+```
+
+```{r}
+#| echo: false
+
+study_data_long %>% 
+    dplyr::select(kccq, kccq_domain, lvef4dautolvq, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>% 
+    dplyr::rename_with(~ paste0("echo_",.), lvef4dautolvq) %>% 
+    calculate_estimates() %>% 
+    arrange_and_exponetiate_overall() %>% 
+    plot_estimates_overall() + 
+    xlab("LEF per SD higher KCCQ-score")
+
+```
+
+Higher EF higher cardiac function
+
+# Part conclusion
+
+Higher KCCQ score indicates better cardiac systolic function. However, indications of diastolic dysfunction was only observed for left atrium volume.
+
+# Classified heart failure association
+
+```{r}
+hf_diagnosis <- c("LAE_lf_art_enlarg","LVH_lf_vent_hyptro", "GLS_imparied",  "DD_dia_dys", "EF_HF", "HFpEF", "HFmrEF_rEF")
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+
+loop_it <- function(hf_outcome, data) {
+
+data %>% 
+    dplyr::select(kccq, kccq_domain, hf_outcome, gender, age,
+                  record_id) %>% 
+    tidyr::drop_na() %>%
+    dplyr::rename_with(~ paste0("echo_",.), paste0(hf_outcome)) %>%
+    calculate_estimates_or() %>%
+    arrange_and_exponetiate() %>%
+    dplyr::rename(nobs = last_col()) %>% 
+    plot_estimates_or() +
+    xlab(paste0(hf_outcome ,"per SD higher KCCQ-score"))
+
+}
+
+map(hf_diagnosis, ~loop_it(.x, study_data_long))
+
+
+# test<- study_data_long %>% 
+#     dplyr::select(kccq, kccq_domain, "DD_dia_dys", gender, age,
+#                   record_id) %>% 
+#     tidyr::drop_na() %>%
+#     dplyr::rename_with(~ paste0("echo_",.), paste0("DD_dia_dys")) %>% 
+#     dplyr::mutate(echo_DD_dia_dys = factor(echo_DD_dia_dys),
+#                     gender = as.factor(gender))
+# 
+# 
+# table(study_data$gender, study_data$DD_dia_dys)
+# str(test)
+# test2 <- test %>%
+#     calculate_estimates_or() %>%
+#     arrange_and_exponetiate() %>% 
+#     dplyr::rename(nobs = last_col())%>%
+#     plot_estimates_or() +
+#     xlab(paste0("LVH_lf_vent_hyptro" ,"per SD higher KCCQ-score"))
+
+```

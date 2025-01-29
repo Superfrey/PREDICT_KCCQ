@@ -1,0 +1,400 @@
+---
+title: "analysis plan"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| warning: false
+#| include: false
+
+library(here)
+source(here::here("R/1_data_management/prep_library.R"))
+source(here::here("R/functions/functions.R"))
+source(here::here("R/tools/ROC_function.R"))
+source(here::here("R/1_data_management/1_load_data.R"))
+```
+
+# Aim
+
+We want to determine the diagnostic value of KCCQ in finding heart failure among people with type 2 diabetes
+
+# Stepwise analysis plan
+
+**1. Determine KCCQ overall scores and questions domain association with continuous subclincal measures for heart failure as well as odds ratio with manifested heart failure.**
+
+Population: People with type 2 diabetes and responding having symptoms of shortness of breath or have been told by doctor
+
+Symptoms assessment: Overall scores and domains from Kansas City Cardiomyoupathy Questionnaire (KCCQ)
+
+Outcome: Continuous subclinical measures of heart failure and binary categorization of presence of heart failure based on cut-off values.
+
+Statistical methods: All overall scores and domains from Kansas City Cardiomyopathy Questionnaire (KCCQ) will be standardized for comparison. We will use linear regression for continuous outcome and logistic regression for categorical outcome. We wil adjust for age and sex.
+
+**2. Step 1: Determine the overall sensitivity of responding having symptoms of shortness of breath**
+
+Population: People with type 2 diabetes and responding yes or no to overall symptoms.
+
+Symptoms assessment: SOB last 14 days
+
+Diagnose: Binary categorization of presence of heart failure based on cut-off values from echo measurements.
+
+Statistical methods: We will simply calculate the sensitivity and specificity.
+
+**3. Step 2: Determine the sensitivity and specificity as well as the false-positive rate by KCCQ in population showing symptoms (based on SOB, doctor).**
+
+```         
+- By overall score
+- By specific question domains
+    - Use LASSO and ridge shrinkage shared variance to find the most important domains
+    
+```
+
+Population: People with type 2 diabetes and responding yes to overall symptoms and doctor assessment for heart failure. They have also completed the KANSAS questionnaire.
+
+Symptoms assessment: Overall scores and domains from Kansas City Cardiomyopathy Questionnaire (KCCQ)
+
+Diagnose: Binary categorization of presence of heart failure based on selected cut-off values from echo measurements.
+
+Decision:
+
+-   How do we define heart failure based on ECHO?
+-   Are we including other diagnostic markers age, sex, diabetes duration?
+    -   I think the aim is to make a simple model as possible for the clinical purpose of prescreening for heart failure.
+
+**4. Investigate the characteristics of the false-negative in the step 1 and step 2 to describe the asymptotically heart failure.**
+
+Population: False-negative individuals in step 1 or step 2 diagnostic model
+
+Statistical methods: Logistic regression
+
+Define characteristics with relevance for quantifying the asymptotically associated heart failure. - Physical activity measures?? - Heart rate and systolic + diastolic blood pressure - Anthropocentric markers (BMI, WC) - Hba1c, Trglycerides, cholesterol
+
+# Questions
+
+-   how do we define heart failure based on cut-off value from the echo measurements?
+
+-   Do some participant know that they have heart failure?
+
+    -   medication use is a challenge?
+
+-   Sample size is low - both on the KCCQ end and the echo end - is data collection continuing in the PREDICT study?
+
+-   Sensitivity of introductive SOB question is very low for each HF failure cut-off
+
+# Points
+
+-   SOB = 0 \~ KCCQ = 100 in all domains
+-   E' are more suspected to be to be linked with Shortness of breath
+
+# Flow diagram
+
+```{r}
+#| echo: false
+
+study_data %>%
+  flowchart::as_fc(label = "PREDICT study population") %>%
+  flowchart::fc_filter(hf_hx == 1 | hf_symptoms == 1,
+    label = "Shortness of breath symptoms or have been told  heart failure", show_exc = T
+  ) %>%
+  flowchart::fc_filter(kccq_complete == 2,
+    label = "Completed the KCCQ", show_exc = T
+  ) %>%
+  flowchart::fc_draw()
+```
+
+```{r}
+#| echo: false
+
+
+study_data %>%
+  flowchart::as_fc(label = "PREDICT study population") %>%
+  flowchart::fc_filter(!is.na(HFrEF),
+    label = "LVEF recorded", show_exc = T
+  ) %>%
+  flowchart::fc_filter(hf_hx == 1 | hf_symptoms == 1,
+    label = "Shortness of breath symptoms or have been told  heart failure", show_exc = T
+  ) %>%
+  flowchart::fc_filter(kccq_complete == 2,
+    label = "Completed the KCCQ", show_exc = T
+  ) %>%
+  flowchart::fc_filter(!is.na(HFrEF),
+    label = "LVEF recorded", show_exc = T
+  ) %>%
+  flowchart::fc_draw()
+```
+
+# Step 1: Determine the overall sensitivity of responding having symptoms of shortness of breath and define population with false negative response.
+
+## Shortness of breath
+
+```{r}
+#| include: false
+#| warning: false
+# study_data$hf_sum_fac <- as.factor(study_data[["hf_symptoms"]])
+# table(study_data$hf_sum_fac, study_data$hf_symptoms)
+# study_data$DD_dia_dys_fac <-factor(study_data[["DD_dia_dys"]], labels = c(0,1))
+#
+# test <- fct_rev(study_data$hf_sum_fac)
+# reference <- fct_rev(study_data$DD_dia_dys_fac)
+# table(test, study_data[["hf_symptoms"]])
+# table(reference, study_data[["DD_dia_dys"]])
+
+sens_LAE <- con_matrix(study_data, "hf_symptoms", "LAE_lf_art_enlarg")
+sens_ci_LAE <- epiR::epi.tests(sens_LAE$table)
+sens_LAE$table
+sens_ci_LAE <- sens_ci_LAE$detail[1:4, ] %>%
+  mutate(heart_failure = "Left_artrium_enlargement")
+
+sens_LVH <- con_matrix(study_data, "hf_symptoms", "LVH_lf_vent_hyptro")
+sens_ci_LVH <- epiR::epi.tests(sens_LVH$table)
+sens_LVH$table
+sens_ci_LVH <- sens_ci_LVH$detail[1:4, ] %>%
+  mutate(heart_failure = "Left_ventricular_hypotrophy")
+
+
+sens_DD <- con_matrix(study_data, "hf_symptoms", "DD_dia_dys")
+sens_ci_DD <- epiR::epi.tests(sens_DD$table)
+sens_ci_DD <- sens_ci_DD$detail[1:4, ] %>%
+  mutate(heart_failure = "Diastolic dysfunction")
+sens_DD$byClass[1]
+
+sens_GLS <- con_matrix(study_data, "hf_symptoms", "GLS_imparied")
+sens_ci_GLS <- epiR::epi.tests(sens_GLS$table)
+sens_ci_GLS <- sens_ci_GLS$detail[1:4, ] %>%
+  mutate(heart_failure = "GLS imparied")
+
+sens_GLS <- con_matrix(study_data, "hf_symptoms", "GLS_imparied")
+sens_ci_GLS <- epiR::epi.tests(sens_GLS$table)
+sens_ci_GLS <- sens_ci_GLS$detail[1:4, ] %>%
+  mutate(heart_failure = "GLS imparied")
+sens_GLS$byClass[1]
+
+# con_matrix(study_data,"hf_symptoms","GLS_abnormal")
+
+sens_EF_HF <- con_matrix(study_data, "hf_symptoms", "EF_HF")
+sens_ci_EF_HF <- epiR::epi.tests(sens_EF_HF$table)
+sens_EF_HF$table
+sens_ci_EF_HF <- sens_ci_EF_HF$detail[1:4, ] %>%
+  mutate(heart_failure = "Midly reduced to reduced ejection fraction (LVEF < 50)")
+
+sens_HFrEF <- con_matrix(study_data, "hf_symptoms", "HFmrEF_rEF")
+sens_ci_sens_HFrEF <- epiR::epi.tests(sens_HFrEF$table)
+sens_HFrEF$table
+sens_ci_HFrEF <- sens_ci_sens_HFrEF$detail[1:4, ] %>%
+  mutate(heart_failure = "HFrEF or HFmrEF (LVEF < 50)")
+
+sens_HFpEF <- con_matrix(study_data, "hf_symptoms", "HFpEF")
+sens_ci_sens_HFpEF <- epiR::epi.tests(sens_HFpEF$table)
+sens_HFpEF$table
+sens_ci_HFpEF <- sens_ci_sens_HFpEF$detail[1:4, ] %>%
+  mutate(heart_failure = "HFpEF (ESC criteria from echo)")
+
+sens_any_HF <- con_matrix(study_data, "hf_symptoms", "any_HF")
+sens_ci_any_HF <- epiR::epi.tests(sens_any_HF$table)
+sens_any_HF$table
+sens_ci_any_HF <- sens_ci_any_HF$detail[1:4, ] %>%
+  mutate(heart_failure = "Any HF (ESC criteria from echo)")
+
+sensitivity_SOB <- rbind(
+  sens_ci_any_HF, sens_ci_HFrEF,
+  sens_ci_HFpEF, sens_ci_LVH, sens_ci_LAE, sens_ci_GLS, sens_ci_DD
+)
+sensitivity_SOB <- sensitivity_SOB %>%
+  dplyr::filter(statistic == "se" | statistic == "sp")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+
+SOB_plot <- sensitivity_SOB %>%
+  ggplot(aes(
+    x = est,
+    y = heart_failure,
+    xmin = lower,
+    xmax = upper,
+    color = statistic
+  ), ) +
+  geom_point() +
+  geom_pointrange() +
+  scale_color_manual(values = c("se" = "#1E88E5", "sp" = "#004D40")) +
+  theme_bw() +
+  theme(
+    panel.border = element_blank(), panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
+    axis.title.y = element_blank()
+  ) +
+  xlab("Sensitivity / Specificity of symptoms of shortness of breath last 14 days")
+
+SOB_plot
+```
+
+```{r}
+#| echo: false
+#| warning: false
+
+sensitivity_SOB
+```
+
+## Partial conclusion:
+
+Signs of shortness of breath has a poor sensitivity on sub clinical measures of heart failure based on defined cut-off. We need more echo measurement to rule if the findings are consistent and discuss which measurement we are going to use from the echo and what should be their cutoff. The limitation for now is we have low count of people with echo who has been processed. Based on our decisions we will determine population with asymptotically heart failure in step 1 by the false negative individuals.
+
+# Step 2: Determine the auc, sensitivity and specificity as well as the false-positive rate by KCCQ
+
+## ROC curve for the overall and different domains of KCCQ
+
+### Including total population
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+hf_diagnosis <- c("LAE_lf_art_enlarg", "GLS_imparied", "LVH_lf_vent_hyptro", "DD_dia_dys", "EF_HF", "HFpEF", "HFmrEF_rEF")
+map(hf_diagnosis, ~ roc_kccq_overall(study_data, .x))
+```
+
+### Best threshold and sensitivity and specificity
+
+function missing social domain function error
+
+can oly include two echo measures for now code error
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+hf_diagnosis <- c("LAE_lf_art_enlarg", "GLS_imparied", "DD_dia_dys", "HFpEF", "any_HF")#, "EF_HF", "HFmrEF_rEF", "LVH_lf_vent_hyptro")
+
+outcome_best_kccq_threshold <- map(hf_diagnosis, ~ roc_kccq_num(study_data, .x))
+
+
+outcome_best_kccq_threshold <- map(hf_diagnosis, ~ roc_kccq_num(study_data, .x))
+
+
+```
+
+#### Partly conclusion:
+
+People who did not respond to the KCCQ due to not have any signs of SOB, skews the ROC curve (grouped distribution of cases). Thus, the question becomes more about which KCCQ domain is a good diagnostic indicator for people who are experiencing shortness of breath, however this population becomes more selected based on the criteria. Should we make a more logistic model to account age = sex and other measures?
+
+### Excluding population without shortnees of breath
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+hf_diagnosis <- c("LAE_lf_art_enlarg", "GLS_imparied", "LVH_lf_vent_hyptro", "DD_dia_dys", "EF_HF", "HFpEF", "HFmrEF_rEF")
+map(hf_diagnosis, ~ roc_kccq(study_data %>%
+  filter(hf_symptoms == 1), .x))
+```
+
+#### Overall domain
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+hf_diagnosis <- c("LAE_lf_art_enlarg", "GLS_imparied", "LVH_lf_vent_hyptro", "DD_dia_dys", "EF_HF", "HFpEF", "HFmrEF_rEF")
+map(hf_diagnosis, ~ roc_kccq_overall(study_data %>%
+  filter(hf_symptoms == 1), .x))
+```
+
+## Partial conlcusion:
+
+The ROC curve make a huge line jump when including those with no SOB (hence 100 KCCQ), likely because of our positive cases have all the same value (100). Shall we therefore exclude those who do not have SOB, as they also has not been asked about the other questions?
+
+The KCCQ domains performs varies depending of the type of heart failure. Single questions within the domain did not outperformed the calculate average for the overall domain. Some of the ROC curve did not performed worse than a coin toss in some of the HF subtypes. Whether this is true or a analysis error has to be checked.
+
+Next steps: - Check what goes wrong in cointoss scenarios - Data driven methods for optimization LASSO - this might be a overkill as we are focusing on the clinical aspect.
+
+## Based on overall scores
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+#
+# overall_LEA <- study_data_complete %>%
+#     select(LAE_lf_art_enlarg, Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score
+#            ,record_id
+#            ) %>%
+#     drop_na()
+#
+# overall_LVH <- study_data_complete %>%
+#     select(LVH_lf_vent_hyptro, Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score
+#            ,record_id
+#            )%>%
+#     drop_na()
+#
+# overall_DD <- study_data_complete %>%
+#     select(DD_dia_dys, Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score
+#            ,record_id
+#            )
+#
+# overall_EF <- study_data_complete %>%
+#     dplyr::select(EF_HF, Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score
+#            ,record_id)
+#
+# overall_EF <- study_data_complete %>%
+#     dplyr::select(EF_HF, Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score
+#            ,record_id)
+#
+# overall_HFpEF <- study_data_complete %>%
+#     dplyr::select("HFpEF", Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score
+#            ,record_id)
+#
+# overall_HFmrEF_rEF <- study_data_complete %>%
+#     dplyr::select("HFmrEF_rEF", Physical_Limitation_Score, Symptom_Frequency_Score, Quality_Life_Score, Social_Limitation_Score, Overall_Summary_Score, Clinical_Summary_Score
+#            ,record_id)
+#
+#
+# prediction_performance_logistic(overall_LEA, "LAE_lf_art_enlarg")
+# prediction_performance_logistic(overall_LVH, "LVH_lf_vent_hyptro")
+# prediction_performance_logistic(overall_DD, "DD_dia_dys")
+# # prediction_performance_logistic(overall_EF, "EF_HF")
+# prediction_performance_logistic(overall_HFpEF, "HFpEF")
+# prediction_performance_logistic(overall_HFmrEF_rEF, "HFmrEF_rEF")
+```
+
+## Based on domains from the scores
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+#
+# domain_LEA <- study_data_complete %>%
+#     select(LAE_lf_art_enlarg, tidyselect::ends_with("rescaled"),record_id
+#            ) %>%
+#     drop_na()
+#
+# domain_LVH <- study_data_complete %>%
+#     select(LVH_lf_vent_hyptro, tidyselect::ends_with("rescaled")
+#            ,record_id
+#            )%>%
+#     drop_na()
+#
+# domain_DD <- study_data_complete %>%
+#     select(DD_dia_dys, tidyselect::ends_with("rescaled")
+#            ,record_id
+#            )
+#
+# domain_EF <- study_data_complete %>%
+#     dplyr::select(EF_HF, tidyselect::ends_with("rescaled"),
+#            ,record_id
+#            )
+# prediction_performance_logistic(domain_LEA, "LAE_lf_art_enlarg")
+# prediction_performance_logistic(domain_LVH, "LVH_lf_vent_hyptro")
+# prediction_performance_logistic(domain_DD, "DD_dia_dys")
+# #prediction_performance_logistic(domain_EF, "EF_HF")
+```
+
+Partial conclusion for now: We have too few cases of heart failure in current study population.
